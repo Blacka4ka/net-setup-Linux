@@ -1,57 +1,51 @@
-# net-setup.sh
+# Network Configurator Script (Bash)
 
-Універсальний скрипт налаштування мережі для Linux з підтримкою основних мережевих менеджерів і можливістю відкату змін.
-
----
-
-## Опис
-
-`net-setup.sh` — це bash-скрипт для швидкого і зручного налаштування мережевого інтерфейсу у Linux-системах. Скрипт автоматично визначає, який менеджер мережі використовується (NetworkManager, systemd-networkd, netplan, ifupdown) та дозволяє:
-
-- Переглянути поточні IP-налаштування інтерфейсів.
-- Обрати інтерфейс для налаштування (автоматично за наявністю лінку або вручну).
-- Вибрати режим роботи: DHCP або статична IP-адреса.
-- Ввести параметри IP, шлюзу та DNS при статичному режимі.
-- Виконати відкат змін до попередніх налаштувань у будь-який момент.
-- Підтримує роботу з основними конфігураційними файлами системи без додаткових залежностей.
+A Bash script to manage network interface settings on Linux systems (Ubuntu/Debian and derivatives).
 
 ---
 
-## Підтримувані менеджери мережі
+## Description
 
-- NetworkManager (nmcli)
-- systemd-networkd
+This script allows you to:
+
+- Automatically detect the active network manager (`NetworkManager`, `netplan`, or `systemd-networkd`).
+- Display the status of network interfaces (link state, IP addresses, gateway, DNS).
+- Select a network interface automatically (with cable connected) or manually.
+- Switch between DHCP and static IP configuration.
+- Apply changes via the appropriate network manager.
+- Roll back to previous network settings if needed.
+- Validate entered IP addresses and subnet masks.
+
+---
+
+## Supported Network Managers
+
+- NetworkManager
 - netplan
-- ifupdown (/etc/network/interfaces)
+- systemd-networkd
 
 ---
 
-## Вимоги
+## Requirements
 
-- Bash shell
-- Права sudo для внесення змін до системних конфігурацій
-- Встановлені інструменти `nmcli`, `netplan`, `systemctl` відповідно до менеджера мережі
+- Run the script as `root` or via `sudo`.
+- Linux system using one of the supported network managers.
+- Installed utilities: `nmcli`, `netplan`, `systemctl`, `ip`, `awk`, `grep`, `tee`.
 
 ---
 
-## Використання
+## Usage
 
-1. Завантажте скрипт і зробіть його виконуваним:
+1. Clone the repository or download the script.
+2. Make the script executable:
+   
+   chmod +x network-configurator.sh
+   
+3. Run the script with administrative privileges
+   sudo ./network-configurator.sh
+   
+4. Follow the prompts to select the interface and configure network settings.
+   
 
-    chmod +x net-setup.sh
-
-2. Запустіть скрипт з правами суперкористувача:
-
-    sudo ./net-setup.sh
-
-Дотримуйтесь інструкцій у консолі:
-
-Оберіть інтерфейс (автоматично або вручну).
-
-Виберіть тип налаштування (DHCP або статичний).
-
-Якщо статичний — введіть IP-адресу, шлюз і DNS.
-
-Підтвердіть застосування налаштувань.
 
 За потреби зробіть відкат змін.
