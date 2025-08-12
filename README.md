@@ -39,11 +39,11 @@ This script allows you to:
 1. Clone the repository or download the script.
 2. Make the script executable:
    
-   chmod +x net-setup.sh
+   `chmod +x net-setup.sh`
    
 3. Run the script with administrative privileges
    
-   sudo ./net-setup.sh
+   `sudo ./net-setup.sh`
    
 4. Follow the prompts to select the interface and configure network settings.
    
