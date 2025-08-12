@@ -1,14 +1,14 @@
 #!/bin/bash
 set -e
 
-# --- Перевірка sudo/root ---
+# --- Check for sudo/root ---
 if [[ $EUID -ne 0 ]]; then
-    echo "Цей скрипт потрібно запускати з правами root або через sudo."
+    echo "This script must be run as root or with sudo."
     exit 1
 fi
 
 clear
-echo "=== Визначення менеджера мережі ==="
+echo "=== Detecting network manager ==="
 
 if systemctl is-active --quiet NetworkManager; then
     NET_CTRL="NetworkManager"
@@ -17,28 +17,28 @@ elif systemctl is-active --quiet systemd-networkd; then
 elif command -v netplan &>/dev/null; then
     NET_CTRL="netplan"
 else
-    echo "Не вдалося визначити менеджер мережі!"
+    echo "Failed to detect network manager!"
     exit 1
 fi
 
-echo "Використовується: $NET_CTRL"
+echo "Using: $NET_CTRL"
 echo "--------------------------------------"
 
-# Визначаємо інтерфейси (крім lo)
+# Detect interfaces (except lo)
 interfaces=($(ip -o link show | awk -F': ' '{print $2}' | grep -v lo))
 
-echo "=== Стан інтерфейсів ==="
+echo "=== Interface status ==="
 for iface in "${interfaces[@]}"; do
     link_state=$(cat /sys/class/net/$iface/carrier 2>/dev/null || echo 0)
-    link_text=$([[ "$link_state" == "1" ]] && echo "Кабель" || echo "Немає лінку")
+    link_text=$([[ "$link_state" == "1" ]] && echo "Cable connected" || echo "No link")
     ips=$(ip -4 addr show "$iface" | awk '/inet /{print $2}' | paste -sd "," -)
     gw=$(ip route show dev "$iface" | awk '/default/ {print $3}' | head -1)
     dns=$(grep "nameserver" /etc/resolv.conf | awk '{print $2}' | paste -sd "," -)
-    echo "  - $iface : $link_text , IP: ${ips:-немає} , GW: ${gw:-немає} , DNS: ${dns:-немає}"
+    echo "  - $iface : $link_text , IP: ${ips:-none} , GW: ${gw:-none} , DNS: ${dns:-none}"
 done
 echo "--------------------------------------"
 
-read -rp "Вибрати інтерфейс автоматично (з лінком)? (y/n): " auto_iface
+read -rp "Select interface automatically (with link)? (y/n): " auto_iface
 if [[ "$auto_iface" =~ ^[Yy]$ ]]; then
     selected_iface=""
     for iface in "${interfaces[@]}"; do
@@ -48,18 +48,18 @@ if [[ "$auto_iface" =~ ^[Yy]$ ]]; then
         fi
     done
 else
-    read -rp "Введіть назву інтерфейсу: " selected_iface
+    read -rp "Enter interface name: " selected_iface
 fi
 
 if [[ -z "$selected_iface" ]]; then
-    echo "Не знайдено активного інтерфейсу."
+    echo "No active interface found."
     exit 1
 fi
 
-echo "Вибрано інтерфейс: $selected_iface"
+echo "Selected interface: $selected_iface"
 echo "--------------------------------------"
 
-# --- Функція валідації IP/маски ---
+# --- IP/mask validation function ---
 validate_ip() {
     local ipmask=$1
     if [[ ! $ipmask =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}/([0-9]{1,2})$ ]]; then
@@ -82,7 +82,7 @@ validate_ip() {
     return 0
 }
 
-# --- Зчитуємо поточні налаштування ---
+# --- Reading current settings ---
 
 old_method=""
 old_ip=""
@@ -102,7 +102,7 @@ if [[ "$NET_CTRL" == "NetworkManager" ]]; then
 elif [[ "$NET_CTRL" == "netplan" ]]; then
     NETPLAN_FILE=$(ls /etc/netplan/*.yaml 2>/dev/null | head -1 || true)
     if [[ -n "$NETPLAN_FILE" ]]; then
-        # Визначаємо, чи є DHCP
+        # Check if DHCP is enabled
         if grep -q "dhcp4: true" "$NETPLAN_FILE"; then
             old_method="auto"
         else
@@ -122,7 +122,7 @@ elif [[ "$NET_CTRL" == "netplan" ]]; then
 elif [[ "$NET_CTRL" == "systemd-networkd" ]]; then
     NETD_CONF="/etc/systemd/network/10-$selected_iface.network"
     if [[ -f "$NETD_CONF" ]]; then
-        # Читаємо [Network] секцію
+        # Read [Network] section
         old_method="static"
         if grep -q "^DHCP=yes" "$NETD_CONF"; then
             old_method="auto"
@@ -136,42 +136,42 @@ elif [[ "$NET_CTRL" == "systemd-networkd" ]]; then
     fi
 
 else
-    echo "Відкат не підтримується для $NET_CTRL"
+    echo "Rollback is not supported for $NET_CTRL"
 fi
 
-echo "Поточні налаштування:"
-echo "  Метод: $old_method"
-echo "  IP: ${old_ip:-немає}"
-echo "  Шлюз: ${old_gw:-немає}"
-echo "  DNS: ${old_dns:-немає}"
+echo "Current settings:"
+echo "  Method: $old_method"
+echo "  IP: ${old_ip:-none}"
+echo "  Gateway: ${old_gw:-none}"
+echo "  DNS: ${old_dns:-none}"
 echo "--------------------------------------"
 
-# --- Обираємо режим ---
+# --- Choose mode ---
 while true; do
-    read -rp "Використовувати DHCP чи Статичний? (dhcp/static): " mode
+    read -rp "Use DHCP or Static? (dhcp/static): " mode
     if [[ "$mode" == "dhcp" || "$mode" == "static" ]]; then
         break
     fi
-    echo "Введіть 'dhcp' або 'static'"
+    echo "Please enter 'dhcp' or 'static'"
 done
 
 if [[ "$mode" == "static" ]]; then
     while true; do
-        read -rp "Введіть IP/маску (наприклад 192.168.1.10/24): " IPADDR
+        read -rp "Enter IP/mask (e.g., 192.168.1.10/24): " IPADDR
         if validate_ip "$IPADDR"; then
             break
         else
-            echo "Неправильний формат IP/маски. Спробуйте ще."
+            echo "Invalid IP/mask format. Try again."
         fi
     done
-    read -rp "Введіть шлюз (GW): " GATEWAY
-    read -rp "Введіть DNS-сервери через кому (наприклад 8.8.8.8,1.1.1.1), або залиште пустим: " DNS
+    read -rp "Enter gateway (GW): " GATEWAY
+    read -rp "Enter DNS servers separated by commas (e.g., 8.8.8.8,1.1.1.1), or leave empty: " DNS
 fi
 
-# --- Застосування налаштувань ---
+# --- Applying settings ---
 
 if [[ "$NET_CTRL" == "NetworkManager" ]]; then
-    echo "⚙ Керуємо через nmcli..."
+    echo "⚙ Managing with nmcli..."
 
     if ! nmcli -t -f NAME con show | grep -qx "$selected_iface"; then
         nmcli con add type ethernet ifname "$selected_iface" con-name "$selected_iface" >/dev/null 2>&1 || true
@@ -190,7 +190,7 @@ if [[ "$NET_CTRL" == "NetworkManager" ]]; then
     nmcli con up "$selected_iface"
 
 elif [[ "$NET_CTRL" == "netplan" ]]; then
-    echo "⚙ Керуємо через netplan..."
+    echo "⚙ Managing with netplan..."
     NETPLAN_FILE=$(ls /etc/netplan/*.yaml 2>/dev/null | head -1)
     if [[ -z "$NETPLAN_FILE" ]]; then
         NETPLAN_FILE="/etc/netplan/01-netcfg.yaml"
@@ -207,7 +207,7 @@ EOF
     else
         dns_line=""
         if [[ -n "$DNS" ]]; then
-            # формуємо список dns без пробілів
+            # format dns list without spaces
             dns_formatted="${DNS//,/ }"
             dns_line="nameservers:
         addresses: [$dns_formatted]"
@@ -230,7 +230,7 @@ EOF
     netplan apply
 
 elif [[ "$NET_CTRL" == "systemd-networkd" ]]; then
-    echo "⚙ Керуємо через systemd-networkd..."
+    echo "⚙ Managing with systemd-networkd..."
     NETD_CONF="/etc/systemd/network/10-$selected_iface.network"
 
     if [[ "$mode" == "dhcp" ]]; then
@@ -264,21 +264,21 @@ EOF
 
     systemctl restart systemd-networkd.service
 else
-    echo "Невідомий менеджер мережі: $NET_CTRL"
+    echo "Unknown network manager: $NET_CTRL"
     exit 1
 fi
 
 echo "--------------------------------------"
-echo "=== Новий стан інтерфейсу $selected_iface ==="
+echo "=== New state of interface $selected_iface ==="
 ip addr show "$selected_iface"
 ip route show dev "$selected_iface"
 echo "--------------------------------------"
 
-# --- Відкат ---
-read -rp "Бажаєте відкотити зміни, повернувши старі налаштування? (y/n): " rollback
+# --- Rollback ---
+read -rp "Do you want to rollback changes and restore old settings? (y/n): " rollback
 
 if [[ "$rollback" =~ ^[Yy]$ ]]; then
-    echo "Повертаємо старі налаштування..."
+    echo "Restoring old settings..."
 
     if [[ "$NET_CTRL" == "NetworkManager" ]]; then
         if [[ "$old_method" == "auto" ]]; then
@@ -363,11 +363,11 @@ EOF
         fi
         systemctl restart systemd-networkd.service
     else
-        echo "Відкат не підтримується для $NET_CTRL"
+        echo "Rollback is not supported for $NET_CTRL"
         exit 1
     fi
 
-    echo "Відкат виконано."
+    echo "Rollback completed."
 else
-    echo "Зміни залишено."
+    echo "Changes kept."
 fi
